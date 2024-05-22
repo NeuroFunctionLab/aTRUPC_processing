@@ -168,18 +168,8 @@ end
 
 %% Pre-segmentation
 % Use anatomical image:
-AI = abs(Image_combined{1, 1, 1});
-AI_2 = AI./max(AI(:)); 
-
-k1=AI_2 > graythresh(AI_2);
-SE=strel('disk',7,4);
-k2=imopen(k1,SE); 
-b=bwlabel(k2);% apply connected component analysis.
-[m,n]=size(b);
-index=b(m.*0.5,n.*0.5);
-b(b~=index)=0;
-BW_brain=imclose(b,strel('disk',18)); 
-C2 = labeloverlay(AI_2,BW_brain);
+AI = abs(Image_combined{1, 1});
+BW_brain = extract_brain_mask(AI,0);
 
 % pre-tissue selection: use the dynamic that has the least L1 norm of the whole image 
 for iRep = 1:nRep
@@ -218,7 +208,7 @@ Niter = 5;
 bBatch = 1;
 for iSet = 1:nSet-1
     [CD_correct, dphi_correct, phi_fit, cc_fit, mask_static_refined] = CDPhaCor_Iter_2D_V3...
-        (mag1, mag2(:, :, iSet), dphi(:, :, iSet), Z1Z2product(:, :, iSet), BW_static, BW_brain, deg_poly_eddycurrent, Niter, bBatch);
+        (mag1, mag2(:, :, iSet), dphi(:, :, iSet), Z1Z2product(:, :, iSet), BW_static, BW_brain, deg_poly_eddycurrent, Niter, bBatch, nRep);
 end
 
 C3 = labeloverlay(CD_image,mask_static_refined);

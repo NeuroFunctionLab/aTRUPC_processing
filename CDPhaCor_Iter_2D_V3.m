@@ -1,5 +1,5 @@
-function [CD_correct, dphi_correct, phi_fit, cc_fit, mask_static_refined] = CDPhaCor_Iter_2D_V3(mag1, mag2, dphi, Z1Z2product, mask_static, mask_brain, deg, Niter, bBatch)
-% MODIFY ON 20230807: considering the batch condition
+function [CD_correct, dphi_correct, phi_fit, cc_fit, mask_static_refined] = CDPhaCor_Iter_2D_V3(mag1, mag2, dphi, Z1Z2product, mask_static, mask_brain, deg, Niter, bBatch, nRep)
+% MODIFY ON 20230807: nRep input
 
 % this function correct the phase errors in complex difference iteratively,
 % based on user input initial static tissue mask, and do the correction 
@@ -34,7 +34,8 @@ function [CD_correct, dphi_correct, phi_fit, cc_fit, mask_static_refined] = CDPh
 if nargin < 9
     bBatch = 0;
 end
-nRep = length(mag1);
+
+% nRep = length(mag1);
 nData = numel(mag1);
 mask_static_refined = mask_static;
 
@@ -107,16 +108,18 @@ if deg == 2 % quadratic fitting
                     CD_correct{iData} = sqrt(max(0, (mag1{iData}.^2+mag2{iData}.^2-2*mag1{iData}.*mag2{iData}.*cos(dphi_correct{iData}))));
                 end
             end
-
-            if iIter ==1
-                % Use the dynamic that has the least L1 norm within the brain:
-                for iRep = 1:nRep
-                    CD_corabs{iRep,1} =  sqrt(CD_correct{iRep,1}.^2);
-                    L1normCD(iRep,1) = sum(CD_corabs{iRep,1}.*mask_brain,'all');
+            
+            ind_L1min = 1;
+            if nRep ~=1
+                if iIter ==1
+                    % Use the dynamic that has the least L1 norm within the brain:
+                    for iRep = 1:nRep
+                        CD_corabs{iRep,1} =  sqrt(CD_correct{iRep,1}.^2);
+                        L1normCD(iRep,1) = sum(CD_corabs{iRep,1}.*mask_brain,'all');
+                    end
+                    [~,ind_L1min] = min(L1normCD);
                 end
-                [~,ind_L1min] = min(L1normCD);
             end
-
             % Use the dynamic that has the least L1 norm within the brain:
             
            
@@ -128,7 +131,7 @@ if deg == 2 % quadratic fitting
                 vessel_thresh = graythresh(CD2mask_norm(logical(mask_brain)));
                 vessel_mask = CD2mask_norm > vessel_thresh;
 
-                figure, imshow(vessel_mask, []);
+                % figure, imshow(vessel_mask, []);
 
                 vessel_mask = bwareaopen(vessel_mask, 2); % remove single dots
                 dilate = 10;

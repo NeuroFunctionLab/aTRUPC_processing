@@ -1,9 +1,11 @@
-function [out, out2, coor_AP,coor_disp]= sortedskel(BW_SSS,branchlimit)
+function [out, out2, coor_AP,coor_disp]= sortedskel(varargin)
+%(BW_SSS,preprocessind,branchlimit)
 % Based on inbuilt function bwskel & bwmorph in imaging processing box
 % sorted all the skeleton points A to P (left to right), tested on 
 % SSS, Straight-sinus
 % input: 
-% BW_SSS: vessel mask 
+% BW_SSS: vessel mask or vessel skeleton 
+% preprocessind: 1 for extracting the skeleton
 % branchlimit: remove unwanted branches on main trace
 
 % output:
@@ -14,19 +16,30 @@ function [out, out2, coor_AP,coor_disp]= sortedskel(BW_SSS,branchlimit)
 % Jie Song
 % 07/04/2023
 
-% pre-processing for skeleton extraction
-BW_SSS = bwareaopen(BW_SSS, 20);
-for i = 1:3
-    BW_SSS = bwmorph(BW_SSS,'spur');
+BW_SSS = varargin{1};
+preprocessind = varargin{2};
+if nargin > 2
+    branchlimit = varargin{3};
 end
-BW_SSS = logical(imfill(BW_SSS,'holes'));
 
-% extract skeleton
-out = bwskel(BW_SSS);
-out2 = bwskel(BW_SSS,'MinBranchLength',branchlimit); % the size of the disk needs modification
-figure,imshow([out,out2],[]); title('skeleton of SSS')
+out = BW_SSS;
+out2 = BW_SSS;
+% Part 1 - pre-processing for skeleton extraction
+if preprocessind == 1
+    BW_SSS = bwareaopen(BW_SSS, 20);
+    for i = 1:3
+        BW_SSS = bwmorph(BW_SSS,'spur');
+    end
+    BW_SSS = logical(imfill(BW_SSS,'holes'));
+    % extract skeleton
+    out = bwskel(BW_SSS);
+    out2 = bwskel(BW_SSS,'MinBranchLength',branchlimit); % the size of the disk needs modification
+    % figure,imshow([out,out2],[]); title('skeleton of SSS')
+end
+
 out2_end = bwmorph(out2,'endpoints');
-figure,imshow([out2,out2_end],[]); title('ends of skeleton')
+% figure,imshow([out2,out2_end],[]); title('ends of skeleton')
+
 % Comparison
 % out = bwskel(logical(BW_SSS));
 % [tryx1,tryy1] = find(out);
@@ -39,6 +52,7 @@ figure,imshow([out2,out2_end],[]); title('ends of skeleton')
 % plot(tryy1,tryx1,'.r','linewidth',2);
 % hold off;
 
+% Part 2 - sort all the skeleton points: A to P
 % find anterior point
 [row_end,col_end] = find(out2_end==1);
 coor_end = [row_end,col_end];
