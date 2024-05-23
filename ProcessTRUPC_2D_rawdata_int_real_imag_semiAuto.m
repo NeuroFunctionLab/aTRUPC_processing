@@ -4,6 +4,7 @@
 % 20230720: V9 : updated version, change the pixel indexing to physical
 % distance for ROI drawing
 % 20230801: V10: updates epsilon calculation for motion-contaminated repetitions
+% 20240522: update Physical length option in adjustable parameters section
 %%
 close all;
 clear;
@@ -12,18 +13,23 @@ tic
 %% Project-specific Parameters
 addpath('C:\Program Files\MATLAB\R2023b\toolbox\spm12'); % path of SPM12
 eTE = [0.44, 40, 80]; % effective TEs, in ms
-im_orientation_PE = 'sag'; % 'sag' (sagittal) or 'ax_ap' (axial, PE direction=A>>P)
-NumROI = 6; % number of ROIs for quantifying T2 and Yv
+im_orientation_PE = 'sag'; % Fixed. 'sag' (sagittal) or 'ax_ap' (axial, PE direction=A>>P)
+
+% ROI in sagittal view
+NumROI = 6; % Fixed. Number of ROIs for quantifying T2 and Yv
 NumPixInROI = [100, 100, 100, 40, 40, 40]; % number of pixels selected for T2 fitting in each ROI
+Physcdist_1 = 30; % Unit: mm. Physical length of each ROI on SSS and SS. eg: 30mm for adults.
+Physcdist_2 = 10; % Unit: mm. Physical length of the interval between the great vein and internal cerebral vein (starting from the ending point)
 
 %% --------------- No change after this line ---------------
 
 %% Load data
 [filename, pathname] = uigetfile('*.dat', 'Select the raw data .dat file');
+[~,NAME_file,fileEXT] = fileparts(filename);
 hct = str2double(inputdlg('Hct'));
 
 savefilename = 'results_real_imag.mat';
-results_folder = [pathname, filename(24:end-4), '_real_imag_semiAuto_V11'];
+results_folder = [pathname, NAME_file, '_real_imag_semiAuto_V12'];
 assert(~exist(results_folder, 'dir'), 'Folder exists!');
     
 mkdir(results_folder);
@@ -181,9 +187,9 @@ end
 [Nrow, Ncol, ~] = size(Image_coil{1});
 
 %% Exclude motion-contaminated repetitions | 20230808
-save([results_folder, filesep, 'varforrep.mat']);
-epsilon = zeros(size(Image_coil,1),1);
-epsilon = exclude_rep_by_epsilon(results_folder);
+% save([results_folder, filesep, 'varforrep.mat']);
+% epsilon = zeros(size(Image_coil,1),1);
+% epsilon = exclude_rep_by_epsilon(results_folder);
 
 % Exclude by fixed threshold for epsilon
 % epi_thresh = 0.08;
@@ -196,10 +202,36 @@ epsilon = exclude_rep_by_epsilon(results_folder);
 %     Image_coil(rep2exclude, :, :) = []; % mark 
 %     nRep = nRep - numel(rep2exclude);
 % end
+Im2disp = cell(nRep, 1);
+figure;
+for iRep = 1:nRep
+    subplot(2, nRep, iRep);
+    Im2disp{iRep} = zeros(Nrow, Ncol);
+    for iSet = 1:nSet - 1
+        Im2disp{iRep} = Im2disp{iRep} + sum(abs(Image_coil{iRep,1,1} - Image_coil{iRep,1,iSet+1}).^2, 3);
+    end
+    Im2disp{iRep} = sqrt(Im2disp{iRep});
+    imshow(Im2disp{iRep}, [0, 150]);
+    title(sprintf('Rep #%d', iRep));
+    subplot(2, nRep, iRep+nRep);
+    imshow(sqrt(sum(abs(Image_coil{iRep,1,1}).^2, 3)), []);
+    set(gca, 'fontsize', 15);
+end
 
 rep2exclude = input('Exclude repetitions?:');
 Image_coil(rep2exclude, :, :) = []; % mark 
 nRep = nRep - numel(rep2exclude);
+
+handle_suplot=get(gcf,'children');
+% The get(gcf, ‘children’) function returns the handles for the sub plots 
+% in the reverse order (i.e., the last subplot as the first handle)
+handle_suplot=handle_suplot(end:-1:1);
+for iExclude = 1:length(rep2exclude)
+    iRep = rep2exclude(iExclude);
+    title(handle_suplot(iRep), sprintf('Rep #%d (Excluded)', iRep));
+end
+saveas(gcf, [results_folder, filesep, 'inspect_images.fig']);
+
 %% Realign across repetitions
 answer1 = questdlg(sprintf('Realign?'), ...
     'Realign?', ...
@@ -697,12 +729,10 @@ figure,imshow(BW_SSS);title('SSS mask');
 branchlimit = 20;
 [skelb_SSS,skel_SSS, coor_AP, coor_disp] = sortedskel(BW_SSS,1,branchlimit);
 
-% 20230630 select prliminary ROI 1/2/3: 30 points 
-% FOV: 200.  // 200/256 * pixel num = true length
-% 20230720: change to physical length: 30mm
-% pixel num = 35/(200/256) = 44.8
+% suggest: Adult: physical length: 30mm
+% pixel num = 30/(200/256) = 38.4
 
-l_ROI = 44.8; % pixel length of ROI
+l_ROI = Physcdist_1/voxelsize(1); % pixel length of ROI
 
 coor_cumudis = cumsum(coor_disp);
 [~,ind] = min(abs(coor_cumudis - l_ROI));
@@ -741,10 +771,6 @@ BW_SS = BW{2}.* mask_vessel_final; figure,imshow(BW_SS);title('SS mask');
 
 branchlimit = 5;
 [skelb_SS,skel_SS, coor_AP, coor_disp] = sortedskel(BW_SS,1,branchlimit);
-
-
-% update 20230720: physical length
-l_ROI = 38.4; % pixel length of ROI
 
 coor_cumudis = cumsum(coor_disp);
 
@@ -827,7 +853,9 @@ coor_cumudis = cumsum(coor_disp);
 
 % from turning point, move 10mm (1cm) towards the end of ICV along the skeleton
 % 12.8 *200/256 =   10mm
-dist = coor_cumudis(ind2) - 12.8;
+l_interval = Physcdist_2/voxelsize(1); % pixel length of two ROI interval
+
+dist = coor_cumudis(ind2) - l_interval;
 [~,ind3] = min(abs(coor_cumudis - dist));
 coor_P(6,:)=coor_AP(ind3,:); % find ICV end
 
